@@ -1,0 +1,286 @@
+From 751019fab97ae763d13acefeccab56479aac58e8 Mon Sep 17 00:00:00 2001
+From: Vladimir K <ew1abz@gmail.com>
+Date: Mon, 23 Sep 2019 00:15:33 -0700
+Subject: [PATCH] Fix cross compilation
+
+---
+ Makefile.linux | 142 ++++++++++++++++++++++++-------------------------
+ 1 file changed, 71 insertions(+), 71 deletions(-)
+
+diff --git a/Makefile.linux b/Makefile.linux
+index 5010833..e80bc28 100644
+--- a/Makefile.linux
++++ b/Makefile.linux
+@@ -13,7 +13,7 @@ all :  $(APPS) direwolf.desktop direwolf.conf
+ 	@echo "        sudo make install"
+ 	@echo " "
+ 
+-CC := gcc
++CC ?= gcc
+ 
+ # Just for fun, let's see how clang compares to gcc.  First install like this:
+ #	sudo apt-get update
+@@ -258,16 +258,17 @@ endif
+ # TODO:  Can we automate this somehow?
+ 
+ alsa = 1
++INCLUDEDIR ?= /usr/include
+ 
+-ifeq ($(wildcard /usr/include/pthread.h),)
+-$(error /usr/include/pthread.h does not exist.  Install it with "sudo apt-get install libc6-dev" or "sudo yum install glibc-headers" )
++ifeq ($(wildcard $(INCLUDEDIR)/pthread.h),)
++$(error $(INCLUDEDIR)/pthread.h does not exist.  Install it with "sudo apt-get install libc6-dev" or "sudo yum install glibc-headers" )
+ endif
+ 
+ ifneq ($(alsa),)
+ CFLAGS += -DUSE_ALSA
+ LDFLAGS += -lasound
+-ifeq ($(wildcard /usr/include/alsa/asoundlib.h),)
+-$(error /usr/include/alsa/asoundlib.h does not exist.  Install it with "sudo apt-get install libasound2-dev" or "sudo yum install alsa-lib-devel" )
++ifeq ($(wildcard $(INCLUDEDIR)/alsa/asoundlib.h),)
++$(error $(INCLUDEDIR)/alsa/asoundlib.h does not exist.  Install it with "sudo apt-get install libasound2-dev" or "sudo yum install alsa-lib-devel" )
+ endif
+ endif
+ 
+@@ -276,22 +277,19 @@ endif
+ # Finding libgps.so* is more difficult because it
+ # is in different places on different operating systems.
+ 
+-enable_gpsd := $(wildcard /usr/include/gps.h)
++enable_gpsd := $(wildcard $(INCLUDEDIR)/gps.h)
+ ifneq ($(enable_gpsd),)
+ CFLAGS += -DENABLE_GPSD
+ LDFLAGS += -lgps
+ endif
+ 
+-
+ # Enable hamlib support if header file is present.
+-
+-enable_hamlib := $(wildcard /usr/include/hamlib/rig.h /usr/local/include/hamlib/rig.h)
++enable_hamlib := $(wildcard $(INCLUDEDIR)/hamlib/rig.h)
+ ifneq ($(enable_hamlib),)
+ CFLAGS += -DUSE_HAMLIB
+ LDFLAGS += -lhamlib
+ endif
+ 
+-
+ # Should enabling of this feature be strongly encouraged or
+ # is it quite specialized and of interest to a small audience?
+ # If, for some reason, can obtain the libudev-dev package, or
+@@ -304,7 +302,7 @@ endif
+ 
+ # Enable cm108 PTT support if libudev header file is present.
+ 
+-enable_cm108 := $(wildcard /usr/include/libudev.h)
++enable_cm108 := $(wildcard $(INCLUDEDIR)/libudev.h)
+ ifneq ($(enable_cm108),)
+ CFLAGS += -DUSE_CM108
+ LDFLAGS += -ludev
+@@ -358,7 +356,7 @@ demod_afsk.o : fsk_fast_filter.h
+ 
+ 
+ fsk_fast_filter.h : gen_fff
+-	./gen_fff > fsk_fast_filter.h
++#	./gen_fff > fsk_fast_filter.h <- It doesn't work with cross compilation.
+ 
+ gen_fff : demod_afsk.c dsp.c textcolor.c
+ 	echo " " > tune.h
+@@ -447,7 +445,7 @@ atest : atest.c demod.o demod_afsk.o demod_psk.o demod_9600.o \
+ # Multiple AGWPE network or serial port clients to test TNCs side by side.
+ 
+ aclients : aclients.c ax25_pad.c fcs_calc.c textcolor.o misc.a
+-	$(CC) $(CFLAGS) -g -o $@ $^ 
++	$(CC) $(CFLAGS) -g -o $@ $^ $(LDFLAGS)
+ 
+ 
+ # Talk to a KISS TNC.
+@@ -466,8 +464,7 @@ cm108 : cm108.c textcolor.o misc.a
+ # Touch Tone to Speech sample application.
+ 
+ ttcalc : ttcalc.o ax25_pad.o fcs_calc.o textcolor.o misc.a
+-	$(CC) $(CFLAGS) -g -o $@ $^ 
+-
++	$(CC) $(CFLAGS) -g -o $@ $^ $(LDFLAGS)
+ 
+ # -----------------------------------------  Libraries  --------------------------------------------
+ 
+@@ -568,7 +565,7 @@ else
+ endif
+ 	@echo 'Name=Dire Wolf' >> $@
+ 	@echo 'Comment=APRS Soundcard TNC' >> $@
+-	@echo 'Icon=$(DESTDIR)/share/direwolf/pixmaps/dw-icon.png' >> $@
++	@echo 'Icon=${DATADIR}/direwolf/pixmaps/dw-icon.png' >> $@
+ 	@echo "Path=$(HOME)" >> $@
+ 	@echo '#Terminal=true' >> $@
+ 	@echo 'Categories=HamRadio' >> $@
+@@ -578,6 +575,8 @@ endif
+ # Installation into $(DESTDIR), usually /usr/local/... or /usr/...
+ # Needs to be run as root or with sudo.
+ 
++SYSCONFDIR ?= /etc
++DATADIR ?= ${DESTDIR}/share
+ 
+ .PHONY: install
+ install : $(APPS) direwolf.conf tocalls.txt symbols-new.txt symbolsX.txt dw-icon.png direwolf.desktop
+@@ -598,89 +597,90 @@ install : $(APPS) direwolf.conf tocalls.txt symbols-new.txt symbolsX.txt dw-icon
+ 	$(INSTALL) -D --mode=755 ttcalc $(DESTDIR)/bin/ttcalc
+ 	$(INSTALL) -D --mode=755 kissutil $(DESTDIR)/bin/kissutil
+ 	$(INSTALL) -D --mode=755 cm108 $(DESTDIR)/bin/cm108
+-	$(INSTALL) -D --mode=755 dwespeak.sh $(DESTDIR)/bin/dwspeak.sh
++#	$(INSTALL) -D --mode=755 dwespeak.sh $(DESTDIR)/bin/dwspeak.sh
+ #
+ # Telemetry Toolkit executables.   Other .conf and .txt files will go into doc directory.
+ #
+-	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-balloon.pl $(DESTDIR)/bin/telem-balloon.pl
+-	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-bits.pl $(DESTDIR)/bin/telem-bits.pl
+-	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-data.pl $(DESTDIR)/bin/telem-data.pl
+-	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-data91.pl $(DESTDIR)/bin/telem-data91.pl
+-	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-eqns.pl $(DESTDIR)/bin/telem-eqns.pl
+-	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-parm.pl $(DESTDIR)/bin/telem-parm.pl
+-	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-seq.sh $(DESTDIR)/bin/telem-seq.sh
+-	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-unit.pl $(DESTDIR)/bin/telem-unit.pl
+-	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-volts.py $(DESTDIR)/bin/telem-volts.py
++#	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-balloon.pl $(DESTDIR)/bin/telem-balloon.pl
++#	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-bits.pl $(DESTDIR)/bin/telem-bits.pl
++#	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-data.pl $(DESTDIR)/bin/telem-data.pl
++#	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-data91.pl $(DESTDIR)/bin/telem-data91.pl
++#	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-eqns.pl $(DESTDIR)/bin/telem-eqns.pl
++#	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-parm.pl $(DESTDIR)/bin/telem-parm.pl
++#	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-seq.sh $(DESTDIR)/bin/telem-seq.sh
++#	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-unit.pl $(DESTDIR)/bin/telem-unit.pl
++#	$(INSTALL) -D --mode=755 telemetry-toolkit/telem-volts.py $(DESTDIR)/bin/telem-volts.py
+ #
+ # Misc. data such as "tocall" to system mapping.
+ #
+-	$(INSTALL) -D --mode=644 tocalls.txt $(DESTDIR)/share/direwolf/tocalls.txt
+-	$(INSTALL) -D --mode=644 symbols-new.txt $(DESTDIR)/share/direwolf/symbols-new.txt
+-	$(INSTALL) -D --mode=644 symbolsX.txt $(DESTDIR)/share/direwolf/symbolsX.txt
++	$(INSTALL) -D --mode=644 tocalls.txt $(DATADIR)/direwolf/tocalls.txt
++	$(INSTALL) -D --mode=644 symbols-new.txt $(DATADIR)/direwolf/symbols-new.txt
++	$(INSTALL) -D --mode=644 symbolsX.txt $(DATADIR)/direwolf/symbolsX.txt
+ #
+ # For desktop icon.
+ #
+-	$(INSTALL) -D --mode=644 dw-icon.png $(DESTDIR)/share/direwolf/pixmaps/dw-icon.png
+-	$(INSTALL) -D --mode=644 direwolf.desktop $(DESTDIR)/share/applications/direwolf.desktop
++	$(INSTALL) -D --mode=644 dw-icon.png $(DATADIR)/direwolf/pixmaps/dw-icon.png
++	$(INSTALL) -D --mode=644 direwolf.desktop $(DATADIR)/applications/direwolf.desktop
+ #
+ # Documentation.  Various plain text files and PDF.
+ #
+-	$(INSTALL) -D --mode=644 CHANGES.md $(DESTDIR)/share/doc/direwolf/CHANGES.md
+-	$(INSTALL) -D --mode=644 LICENSE-dire-wolf.txt $(DESTDIR)/share/doc/direwolf/LICENSE-dire-wolf.txt
+-	$(INSTALL) -D --mode=644 LICENSE-other.txt $(DESTDIR)/share/doc/direwolf/LICENSE-other.txt
++	$(INSTALL) -D --mode=644 CHANGES.md ${DATADIR}/doc/direwolf/CHANGES.md
++	$(INSTALL) -D --mode=644 LICENSE-dire-wolf.txt ${DATADIR}/doc/direwolf/LICENSE-dire-wolf.txt
++	$(INSTALL) -D --mode=644 LICENSE-other.txt ${DATADIR}/doc/direwolf/LICENSE-other.txt
+ #
+ # ./README.md is an overview for the project main page.
+ # Maybe we could stick it in some other place.
+ # doc/README.md contains an overview of the PDF file contents and is more useful here.
+ #
+-	$(INSTALL) -D --mode=644 doc/README.md $(DESTDIR)/share/doc/direwolf/README.md
+-	$(INSTALL) -D --mode=644 doc/2400-4800-PSK-for-APRS-Packet-Radio.pdf $(DESTDIR)/share/doc/direwolf/2400-4800-PSK-for-APRS-Packet-Radio.pdf
+-	$(INSTALL) -D --mode=644 doc/A-Better-APRS-Packet-Demodulator-Part-1-1200-baud.pdf $(DESTDIR)/share/doc/direwolf/A-Better-APRS-Packet-Demodulator-Part-1-1200-baud.pdf
+-	$(INSTALL) -D --mode=644 doc/A-Better-APRS-Packet-Demodulator-Part-2-9600-baud.pdf $(DESTDIR)/share/doc/direwolf/A-Better-APRS-Packet-Demodulator-Part-2-9600-baud.pdf
+-	$(INSTALL) -D --mode=644 doc/A-Closer-Look-at-the-WA8LMF-TNC-Test-CD.pdf $(DESTDIR)/share/doc/direwolf/A-Closer-Look-at-the-WA8LMF-TNC-Test-CD.pdf
+-	$(INSTALL) -D --mode=644 doc/APRS-Telemetry-Toolkit.pdf $(DESTDIR)/share/doc/direwolf/APRS-Telemetry-Toolkit.pdf
+-	$(INSTALL) -D --mode=644 doc/APRStt-Implementation-Notes.pdf $(DESTDIR)/share/doc/direwolf/APRStt-Implementation-Notes.pdf
+-	$(INSTALL) -D --mode=644 doc/APRStt-interface-for-SARTrack.pdf $(DESTDIR)/share/doc/direwolf/APRStt-interface-for-SARTrack.pdf
+-	$(INSTALL) -D --mode=644 doc/APRStt-Listening-Example.pdf $(DESTDIR)/share/doc/direwolf/APRStt-Listening-Example.pdf
+-	$(INSTALL) -D --mode=644 doc/Bluetooth-KISS-TNC.pdf $(DESTDIR)/share/doc/direwolf/Bluetooth-KISS-TNC.pdf
+-	$(INSTALL) -D --mode=644 doc/Going-beyond-9600-baud.pdf $(DESTDIR)/share/doc/direwolf/Going-beyond-9600-baud.pdf
+-	$(INSTALL) -D --mode=644 doc/Raspberry-Pi-APRS.pdf $(DESTDIR)/share/doc/direwolf/Raspberry-Pi-APRS.pdf
+-	$(INSTALL) -D --mode=644 doc/Raspberry-Pi-APRS-Tracker.pdf $(DESTDIR)/share/doc/direwolf/Raspberry-Pi-APRS-Tracker.pdf
+-	$(INSTALL) -D --mode=644 doc/Raspberry-Pi-SDR-IGate.pdf $(DESTDIR)/share/doc/direwolf/Raspberry-Pi-SDR-IGate.pdf
+-	$(INSTALL) -D --mode=644 doc/Successful-APRS-IGate-Operation.pdf $(DESTDIR)/share/doc/direwolf/Successful-APRS-IGate-Operation.pdf
+-	$(INSTALL) -D --mode=644 doc/User-Guide.pdf $(DESTDIR)/share/doc/direwolf/User-Guide.pdf
+-	$(INSTALL) -D --mode=644 doc/WA8LMF-TNC-Test-CD-Results.pdf $(DESTDIR)/share/doc/direwolf/WA8LMF-TNC-Test-CD-Results.pdf
++	$(INSTALL) -D --mode=644 doc/README.md ${DATADIR}/doc/direwolf/README.md
++	$(INSTALL) -D --mode=644 doc/2400-4800-PSK-for-APRS-Packet-Radio.pdf ${DATADIR}/doc/direwolf/2400-4800-PSK-for-APRS-Packet-Radio.pdf
++	$(INSTALL) -D --mode=644 doc/A-Better-APRS-Packet-Demodulator-Part-1-1200-baud.pdf ${DATADIR}/doc/direwolf/A-Better-APRS-Packet-Demodulator-Part-1-1200-baud.pdf
++	$(INSTALL) -D --mode=644 doc/A-Better-APRS-Packet-Demodulator-Part-2-9600-baud.pdf ${DATADIR}/doc/direwolf/A-Better-APRS-Packet-Demodulator-Part-2-9600-baud.pdf
++	$(INSTALL) -D --mode=644 doc/A-Closer-Look-at-the-WA8LMF-TNC-Test-CD.pdf ${DATADIR}/doc/direwolf/A-Closer-Look-at-the-WA8LMF-TNC-Test-CD.pdf
++	$(INSTALL) -D --mode=644 doc/APRS-Telemetry-Toolkit.pdf ${DATADIR}/doc/direwolf/APRS-Telemetry-Toolkit.pdf
++	$(INSTALL) -D --mode=644 doc/APRStt-Implementation-Notes.pdf ${DATADIR}/doc/direwolf/APRStt-Implementation-Notes.pdf
++	$(INSTALL) -D --mode=644 doc/APRStt-interface-for-SARTrack.pdf ${DATADIR}/doc/direwolf/APRStt-interface-for-SARTrack.pdf
++	$(INSTALL) -D --mode=644 doc/APRStt-Listening-Example.pdf ${DATADIR}/doc/direwolf/APRStt-Listening-Example.pdf
++	$(INSTALL) -D --mode=644 doc/Bluetooth-KISS-TNC.pdf ${DATADIR}/doc/direwolf/Bluetooth-KISS-TNC.pdf
++	$(INSTALL) -D --mode=644 doc/Going-beyond-9600-baud.pdf ${DATADIR}/doc/direwolf/Going-beyond-9600-baud.pdf
++	$(INSTALL) -D --mode=644 doc/Raspberry-Pi-APRS.pdf ${DATADIR}/doc/direwolf/Raspberry-Pi-APRS.pdf
++	$(INSTALL) -D --mode=644 doc/Raspberry-Pi-APRS-Tracker.pdf ${DATADIR}/doc/direwolf/Raspberry-Pi-APRS-Tracker.pdf
++	$(INSTALL) -D --mode=644 doc/Raspberry-Pi-SDR-IGate.pdf ${DATADIR}/doc/direwolf/Raspberry-Pi-SDR-IGate.pdf
++	$(INSTALL) -D --mode=644 doc/Successful-APRS-IGate-Operation.pdf ${DATADIR}/doc/direwolf/Successful-APRS-IGate-Operation.pdf
++	$(INSTALL) -D --mode=644 doc/User-Guide.pdf ${DATADIR}/doc/direwolf/User-Guide.pdf
++	$(INSTALL) -D --mode=644 doc/WA8LMF-TNC-Test-CD-Results.pdf ${DATADIR}/doc/direwolf/WA8LMF-TNC-Test-CD-Results.pdf
+ #
+ # Various sample config and other files go into examples under the doc directory.
+ # When building from source, these can be put in home directory with "make install-conf".
+ # When installed from .DEB or .RPM package, the user will need to copy these to
+ # the home directory or other desired location.
+ #
+-	$(INSTALL) -D --mode=644 direwolf.conf $(DESTDIR)/share/doc/direwolf/examples/direwolf.conf
+-	$(INSTALL) -D --mode=755 dw-start.sh $(DESTDIR)/share/doc/direwolf/examples/dw-start.sh
+-	$(INSTALL) -D --mode=644 sdr.conf $(DESTDIR)/share/doc/direwolf/examples/sdr.conf
+-	$(INSTALL) -D --mode=644 telemetry-toolkit/telem-m0xer-3.txt $(DESTDIR)/share/doc/direwolf/examples/telem-m0xer-3.txt
+-	$(INSTALL) -D --mode=644 telemetry-toolkit/telem-balloon.conf $(DESTDIR)/share/doc/direwolf/examples/telem-balloon.conf
+-	$(INSTALL) -D --mode=644 telemetry-toolkit/telem-volts.conf $(DESTDIR)/share/doc/direwolf/examples/telem-volts.conf
++	$(INSTALL) -D --mode=644 direwolf.conf ${DATADIR}/doc/direwolf/examples/direwolf.conf
++	$(INSTALL) -D --mode=755 dw-start.sh ${DATADIR}/doc/direwolf/examples/dw-start.sh
++	$(INSTALL) -D --mode=644 sdr.conf ${DATADIR}/doc/direwolf/examples/sdr.conf
++	$(INSTALL) -D --mode=644 telemetry-toolkit/telem-m0xer-3.txt ${DATADIR}/doc/direwolf/examples/telem-m0xer-3.txt
++	$(INSTALL) -D --mode=644 telemetry-toolkit/telem-balloon.conf ${DATADIR}/doc/direwolf/examples/telem-balloon.conf
++	$(INSTALL) -D --mode=644 telemetry-toolkit/telem-volts.conf ${DATADIR}/doc/direwolf/examples/telem-volts.conf
+ #
+ # "man" pages
+ #
+-	$(INSTALL) -D --mode=644 man1/aclients.1 $(DESTDIR)/share/man/man1/aclients.1
+-	$(INSTALL) -D --mode=644 man1/atest.1 $(DESTDIR)/share/man/man1/atest.1
+-	$(INSTALL) -D --mode=644 man1/decode_aprs.1 $(DESTDIR)/share/man/man1/decode_aprs.1
+-	$(INSTALL) -D --mode=644 man1/direwolf.1 $(DESTDIR)/share/man/man1/direwolf.1
+-	$(INSTALL) -D --mode=644 man1/gen_packets.1 $(DESTDIR)/share/man/man1/gen_packets.1
+-	$(INSTALL) -D --mode=644 man1/kissutil.1 $(DESTDIR)/share/man/man1/kissutil.1
+-	$(INSTALL) -D --mode=644 man1/ll2utm.1 $(DESTDIR)/share/man/man1/ll2utm.1
+-	$(INSTALL) -D --mode=644 man1/log2gpx.1 $(DESTDIR)/share/man/man1/log2gpx.1
+-	$(INSTALL) -D --mode=644 man1/text2tt.1 $(DESTDIR)/share/man/man1/text2tt.1
+-	$(INSTALL) -D --mode=644 man1/tt2text.1 $(DESTDIR)/share/man/man1/tt2text.1
+-	$(INSTALL) -D --mode=644 man1/utm2ll.1 $(DESTDIR)/share/man/man1/utm2ll.1
++	$(INSTALL) -D --mode=644 man1/aclients.1 ${DATADIR}/man/man1/aclients.1
++	$(INSTALL) -D --mode=644 man1/atest.1 ${DATADIR}/man/man1/atest.1
++	$(INSTALL) -D --mode=644 man1/decode_aprs.1 ${DATADIR}/man/man1/decode_aprs.1
++	$(INSTALL) -D --mode=644 man1/direwolf.1 ${DATADIR}/man/man1/direwolf.1
++	$(INSTALL) -D --mode=644 man1/gen_packets.1 ${DATADIR}/man/man1/gen_packets.1
++	$(INSTALL) -D --mode=644 man1/kissutil.1 ${DATADIR}/man/man1/kissutil.1
++	$(INSTALL) -D --mode=644 man1/ll2utm.1 ${DATADIR}/man/man1/ll2utm.1
++	$(INSTALL) -D --mode=644 man1/log2gpx.1 ${DATADIR}/man/man1/log2gpx.1
++	$(INSTALL) -D --mode=644 man1/text2tt.1 ${DATADIR}/man/man1/text2tt.1
++	$(INSTALL) -D --mode=644 man1/tt2text.1 ${DATADIR}/man/man1/tt2text.1
++	$(INSTALL) -D --mode=644 man1/utm2ll.1 ${DATADIR}/man/man1/utm2ll.1
+ #
+ # Set group and mode of HID devices corresponding to C-Media USB Audio adapters.
+ # This will allow us to use the CM108/CM119 GPIO pins for PTT.
+ #
+-	$(INSTALL) -D --mode=644 99-direwolf-cmedia.rules /etc/udev/rules.d/99-direwolf-cmedia.rules
++	$(INSTALL) -D --mode=644 99-direwolf-cmedia.rules ${SYSCONFDIR}/udev/rules.d/99-direwolf-cmedia.rules
++#	$(INSTALL) -D --mode=644 99-direwolf-cmedia.rules /etc/udev/rules.d/99-direwolf-cmedia.rules
+ #
+ 	@echo " "
+ 	@echo "If this is your first install, not an upgrade, type this to put a copy"
+@@ -693,7 +693,7 @@ install : $(APPS) direwolf.conf tocalls.txt symbols-new.txt symbolsX.txt dw-icon
+ # Put sample configuration & startup files in home directory.
+ # This step would be done as ordinary user.
+ # Some people like to put the direwolf config file in /etc/ax25.
+-# Note that all of these are also in $(DESTDIR)/share/doc/direwolf/examples/.
++# Note that all of these are also in ${DATADIR}/doc/direwolf/examples/.
+ 
+ # The Raspberry Pi has ~/Desktop but Ubuntu does not.
+ 
+@@ -724,7 +724,7 @@ endif
+ 
+ .PHONY: install-rpi
+ install-rpi : 
+-	ln -f -s $(DESTDIR)/share/applications/direwolf.desktop ~/Desktop/direwolf.desktop
++	ln -f -s ${DATADIR}/applications/direwolf.desktop ~/Desktop/direwolf.desktop
+ 
+ 
+ 
