@@ -22,7 +22,7 @@ LIC_FILES_CHKSUM = "file://LICENSE-other.txt;md5=6647050027a94e202de73b14daa630d
                     file://regex/COPYING;md5=393a5ca445f6965873eca0259a17f833"
 
 SRC_URI[md5sum] = "df444819172c01ab1d1d959e2b6f9a9e"
-SRCREV = "${AUTOREV}"
+SRCREV = "a1e2d1c3a88723e41efaf44a10f6374e6dfdd8df"
 SRC_URI = "git://github.com/wb2osz/direwolf.git;protocol=https;branch=master \
            file://0001-Change-makefile-for-native-recipe.patch \
            "
@@ -30,7 +30,7 @@ SRC_URI = "git://github.com/wb2osz/direwolf.git;protocol=https;branch=master \
 BBCLASSEXTEND = "native"
 inherit native
 
-S = "${WORKDIR}/git/"
+S = "${WORKDIR}/git"
 
 do_compile () {
     oe_runmake fsk_fast_filter.h
